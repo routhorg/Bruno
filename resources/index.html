@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bruno's Hub</title>
+    <link rel="icon" href="/resources/icons/appIcon.png" type="image/png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #050505; --glass: rgba(20, 20, 20, 0.95); --border: rgba(255, 255, 255, 0.1);
+            --maroon: #800000; --maroon-light: #a00000; --text: #e5e7eb;
+        }
+        body { font-family: 'Inter', sans-serif !important; background-color: var(--bg) !important; color: var(--text) !important; height: 100vh; overflow: hidden; }
+        * { border-radius: 0 !important; }
+
+        /* FREE CANVAS PANELS */
+        .glass-panel, header, .sidebar, .dropdown-menu, .modal-content {
+            background-color: var(--glass) !important;
+            backdrop-filter: blur(16px) !important;
+            border: 1px solid var(--border) !important;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important;
+        }
+        .glass-panel {
+            position: absolute !important; /* CRITICAL FOR MOVING */
+            resize: both;
+            overflow: hidden; /* Hide scrollbars during resize, internal elements handle it */
+            min-width: 250px; min-height: 200px;
+            display: flex; flex-direction: column;
+        }
+        
+        /* DRAG HANDLE */
+        .drag-handle {
+            position: absolute; top: 0; right: 0;
+            padding: 8px; cursor: move; color: #555;
+            z-index: 50; transition: color 0.2s;
+        }
+        .drag-handle:hover { color: var(--text); }
+
+        /* Z-INDEX & LAYOUT */
+        header { z-index: 1000 !important; position: relative; }
+        .dropdown-menu { z-index: 1001 !important; }
+        .sidebar { z-index: 900 !important; position: relative; }
+        main { position: relative; z-index: 1; } /* The canvas */
+        .modal-backdrop { z-index: 9999 !important; background-color: rgba(0,0,0,0.85); }
+
+        /* CONTROLS */
+        .timer-font { font-family: 'JetBrains Mono', monospace !important; }
+        .maroon-btn, .pomodoro-btn.active { background-color: var(--maroon) !important; color: #fff !important; border: none !important; font-weight: 600 !important; letter-spacing: 0.05em; }
+        .maroon-btn:hover { background-color: var(--maroon-light) !important; }
+        input, select, textarea, .pomodoro-btn { background-color: #111 !important; border: 1px solid var(--border) !important; color: var(--text) !important; transition: all 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: var(--maroon) !important; outline: none !important; box-shadow: 0 0 0 2px rgba(128, 0, 0, 0.3) !important; }
+
+        /* UTILITY */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--maroon); }
+        .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="flex flex-col">
+
+    <header class="h-14 flex-shrink-0 border-b border-white/10 flex justify-between items-center px-6">
+        <h1 class="font-semibold tracking-wider text-white">BRUNO</h1>
+        <div class="relative group h-full flex items-center">
+            <button class="flex items-center gap-2 text-sm text-gray-400 hover:text-white px-4 h-full hover:bg-white/5 transition-all"><i class="fas fa-link"></i> LINKS</button>
+            <div class="dropdown-menu absolute right-0 top-full w-80 hidden group-hover:block p-4 shadow-2xl border-t-0">
+                 <form id="add-link-form" class="flex flex-col gap-2 mb-4">
+                    <input type="text" id="link-title-input" class="p-2 text-xs" placeholder="Title..." required>
+                    <div class="flex gap-2"><input type="url" id="link-url-input" class="flex-1 p-2 text-xs" placeholder="https://..." required><button type="submit" class="maroon-btn px-4 py-2 text-xs">ADD</button></div>
+                </form>
+                <ul id="links-container" class="max-h-60 overflow-y-auto custom-scrollbar space-y-1"></ul>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <aside id="vault-sidebar" class="sidebar w-14 hover:w-72 transition-all duration-300 border-r border-white/10 flex flex-col">
+            <div class="h-14 flex items-center justify-center flex-shrink-0 text-gray-500"><i class="fas fa-archive"></i></div>
+            <div class="flex-1 p-4 opacity-0 hover:opacity-100 transition-opacity duration-300 overflow-hidden flex flex-col">
+                <h2 class="text-xs font-bold text-gray-500 tracking-widest uppercase mb-4">Task Vault</h2>
+                <div id="vault-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-3"></div>
+            </div>
+        </aside>
+
+        <main id="main-canvas" class="flex-1 bg-black relative overflow-hidden">
+            <div id="current-date" class="absolute top-4 left-0 right-0 text-center text-xs font-bold text-gray-600 tracking-[0.4em] uppercase pointer-events-none"></div>
+
+            <div class="glass-panel p-6" style="top: 50px; left: 30px; width: 320px; height: 350px;">
+                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                <div id="pomodoro-display-view" class="w-full flex flex-col items-center h-full justify-center">
+                    <div id="pomodoro-timer-display" class="text-6xl mb-6 timer-font">25:00</div>
+                    <div class="flex w-full mb-6 gap-1"><button id="pomo-mode-work" class="pomodoro-btn flex-1 py-2 text-[10px] font-bold active">WORK</button><button id="pomo-mode-short" class="pomodoro-btn flex-1 py-2 text-[10px] font-bold">SHORT</button><button id="pomo-mode-long" class="pomodoro-btn flex-1 py-2 text-[10px] font-bold">LONG</button></div>
+                    <div class="flex gap-2 w-full"><button id="pomodoro-main-btn" class="maroon-btn flex-[2] py-3 text-sm font-bold tracking-widest">START</button><button id="pomodoro-reset-btn" class="pomodoro-btn flex-1 text-gray-400 hover:text-white"><i class="fas fa-sync-alt"></i></button><button id="pomodoro-edit-btn" class="pomodoro-btn flex-1 text-gray-400 hover:text-white"><i class="fas fa-cog"></i></button></div>
+                </div>
+                <div id="pomodoro-edit-view" class="hidden w-full flex flex-col gap-3 h-full justify-center">
+                    <div class="text-xs text-gray-500 uppercase text-center mb-2">Settings (Mins)</div>
+                    <div class="flex gap-2"><input type="number" id="pomo-edit-work-input" class="flex-1 text-center p-2" placeholder="Work"><input type="number" id="pomo-edit-short-input" class="flex-1 text-center p-2" placeholder="Short"><input type="number" id="pomo-edit-long-input" class="flex-1 text-center p-2" placeholder="Long"></div>
+                    <div class="flex gap-2 mt-2"><button id="pomo-edit-save-btn" class="maroon-btn flex-1 py-2 text-xs font-bold">SAVE</button><button id="pomo-edit-cancel-btn" class="pomodoro-btn flex-1 py-2 text-xs">CANCEL</button></div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-6" style="top: 50px; left: 370px; width: 450px; height: 350px;">
+                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                <div class="flex flex-col h-full gap-4 overflow-hidden">
+                    <div class="h-[60%] flex flex-col relative min-h-0"><canvas id="subject-chart" class="hidden"></canvas><div id="chart-placeholder" class="absolute inset-0 flex items-center justify-center text-xs text-gray-600 uppercase tracking-widest">No Data</div></div>
+                    <div class="h-px bg-white/10 flex-shrink-0"></div>
+                    <div class="h-[40%] flex flex-col relative min-h-0"><canvas id="time-bar-chart" class="hidden"></canvas><div id="bar-chart-placeholder" class="absolute inset-0 flex items-center justify-center text-xs text-gray-600 uppercase tracking-widest">Start Working</div></div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-6" style="top: 50px; left: 840px; width: 280px; height: 350px;">
+                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                <div class="flex flex-col h-full overflow-hidden">
+                    <form id="add-subject-form" class="flex gap-2 mb-4 flex-shrink-0"><input type="text" id="subject-name-input" class="flex-1 p-2 text-xs" placeholder="NEW SUBJECT..." required><button type="submit" class="maroon-btn px-3"><i class="fas fa-plus"></i></button></form>
+                    <ul id="subject-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-1"></ul>
+                </div>
+            </div>
+
+            <div class="glass-panel p-6" style="top: 420px; left: 30px; width: 1090px; height: 400px;">
+                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                <div class="flex flex-col h-full overflow-hidden">
+                    <div class="flex justify-between items-center mb-6 flex-shrink-0"><h1 class="text-xl font-light tracking-[0.2em] uppercase text-white">Daily Plan</h1><button id="complete-day-button" class="maroon-btn py-2 px-6 text-xs font-bold tracking-widest hover:scale-105 transition-transform">COMPLETE DAY</button></div>
+                    <form id="add-task-form" class="flex gap-px mb-6 bg-white/5 border border-white/10 flex-shrink-0"><input type="text" id="task-input" class="flex-[3] bg-transparent border-none p-3 focus:ring-0 text-sm" placeholder="What needs to be done?" required style="border: none !important; background-color: transparent !important;"><select id="task-subject-select" class="flex-1 bg-transparent border-l border-white/10 p-3 text-xs cursor-pointer text-gray-400 hover:text-white transition-colors" style="border-radius: 0 !important;"></select><input type="date" id="task-due-date" class="bg-transparent border-l border-white/10 p-3 text-xs cursor-pointer text-gray-400 hover:text-white transition-colors" style="border-radius: 0 !important;"><button type="submit" class="maroon-btn px-6 font-bold tracking-widest text-xs">ADD</button></form>
+                    <ul id="task-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1"></ul>
+                </div>
+            </div>
+        </main>
+
+        <aside id="cabinet-sidebar" class="sidebar w-14 hover:w-72 transition-all duration-300 border-l border-white/10 flex flex-col">
+            <div class="h-14 flex items-center justify-center flex-shrink-0 text-gray-500"><i class="fas fa-box-archive"></i></div>
+            <div class="flex-1 p-4 opacity-0 hover:opacity-100 transition-opacity duration-300 overflow-hidden flex flex-col">
+                <h2 class="text-xs font-bold text-gray-500 tracking-widest uppercase mb-4">Cabinet</h2>
+                <form id="add-cabinet-form" class="flex gap-2 mb-4"><input type="text" id="cabinet-name-input" class="flex-1 p-2 text-xs" placeholder="NEW CABINET..." required><button type="submit" class="maroon-btn px-3 text-xs">ADD</button></form>
+                <div id="cabinets-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-4"></div>
+            </div>
+        </aside>
+    </div>
+
+    <div id="alert-container" class="fixed top-4 right-4 z-[99999] space-y-2 w-80"></div>
+    <div id="log-modal" class="modal-backdrop fixed inset-0 flex items-center justify-center hidden"><div class="modal-content p-6 w-full max-w-lg m-4"><h3 class="text-sm font-bold mb-4 uppercase tracking-wider" id="log-modal-title">Log Notes</h3><textarea id="log-modal-textarea" class="w-full h-48 p-4 mb-6 resize-none font-light bg-black" placeholder="Type here..."></textarea><input type="hidden" id="log-modal-task-id"><div class="flex justify-end gap-3"><button id="log-modal-cancel-btn" class="pomodoro-btn py-3 px-6 text-xs font-bold">CANCEL</button><button id="log-modal-save-btn" class="maroon-btn py-3 px-6 text-xs font-bold">SAVE</button></div></div></div>
+    <div id="log-time-modal" class="modal-backdrop fixed inset-0 flex items-center justify-center hidden"><div class="modal-content p-8 w-full max-w-md m-4 text-center"><h3 class="text-sm font-bold mb-8 uppercase tracking-wider" id="log-time-modal-title">Log Time manually</h3><div class="flex items-center justify-center gap-4 mb-8"><div><input type="number" id="log-time-hours" class="w-24 h-24 text-center text-5xl timer-font bg-black/50" min="0" placeholder="0"><div class="text-xs text-gray-500 mt-2 uppercase tracking-widest">HRS</div></div><span class="text-4xl text-gray-600">:</span><div><input type="number" id="log-time-minutes" class="w-24 h-24 text-center text-5xl timer-font bg-black/50" min="0" max="59" placeholder="00"><div class="text-xs text-gray-500 mt-2 uppercase tracking-widest">MIN</div></div></div><input type="hidden" id="log-time-task-id"><div class="flex gap-3"><button id="log-time-save-btn" class="maroon-btn flex-1 py-3 text-sm font-bold tracking-widest">CONFIRM</button><button id="log-time-cancel-btn" class="pomodoro-btn flex-1 py-3 text-sm font-bold">CANCEL</button></div></div></div>
+
+    <script src="js/neutralino.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
