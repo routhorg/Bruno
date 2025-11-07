@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Planner & Links</title>
+    <!-- Stylesheets are loaded locally or via https -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- 
+      This is where your TypeScript file will be injected by Vite/your build tool.
+      You might need to add: <script type="module" src="/src/main.ts"></script> 
+      (Check your project setup)
+    -->
+
+    <style>
+        /* Using System Font for faster loading */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+                "Segoe UI Symbol";
+            background-color: #f3f4f6; /* gray-100 */
+            color: #1f2937; /* gray-800 */
+        }
+        
+        /* Custom styles for checked state */
+        .task-checkbox:checked + .task-label {
+            text-decoration: line-through;
+            color: #6b7280; /* gray-500 */
+        }
+
+        /* Header Layout */
+        header {
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb; /* gray-200 */
+        }
+
+        /* Dropdown Menu Styles (for header) */
+        .dropdown {
+            position: relative;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            width: 24rem; /* w-96 */
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            z-index: 50;
+            overflow: hidden;
+            padding-top: 0.5rem; 
+        }
+        /* FIX: Remove small gap */
+        .dropdown:hover .dropdown-menu,
+        .dropdown-menu:hover {
+            display: block;
+        }
+        .dropdown > button {
+            padding-bottom: 0.5rem;
+            padding-top: 0.5rem;
+        }
+
+        /* --- Vault Sidebar Styles --- */
+        #vault-sidebar {
+            flex-shrink: 0;
+            width: 4rem; /* 64px */
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 1rem; /* 16px */
+            height: calc(100vh - 80px - 2rem); /* Full height minus header and padding */
+            position: sticky; /* Stick to top */
+            top: 1rem; 
+        }
+        #vault-sidebar:hover {
+            width: 24rem; /* 384px */
+        }
+        
+        /* Hide sidebar content when collapsed */
+        #vault-sidebar .sidebar-content {
+            opacity: 0;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            transform: translateX(-1rem); /* Default transform */
+        }
+        #vault-sidebar:hover .sidebar-content {
+            opacity: 1;
+            transform: translateX(0);
+            transition: opacity 0.3s ease-in 0.1s, transform 0.3s ease-in 0.1s; /* Delay transition */
+        }
+        
+        /* Hide sidebar icon when expanded */
+        #vault-sidebar:hover .sidebar-icon {
+            opacity: 0;
+        }
+
+        /* --- NEW: Cabinet Sidebar Styles --- */
+         #cabinet-sidebar {
+            flex-shrink: 0;
+            width: 4rem; /* 64px */
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 1rem; /* 16px */
+            height: calc(100vh - 80px - 2rem); /* Full height minus header and padding */
+            position: sticky; /* Stick to top */
+            top: 1rem; 
+        }
+        #cabinet-sidebar:hover {
+            width: 24rem; /* 384px */
+        }
+        
+        /* Hide sidebar content when collapsed */
+        #cabinet-sidebar .sidebar-content {
+            opacity: 0;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            transform: translateX(1rem); /* Transform from right */
+        }
+        #cabinet-sidebar:hover .sidebar-content {
+            opacity: 1;
+            transform: translateX(0);
+            transition: opacity 0.3s ease-in 0.1s, transform 0.3s ease-in 0.1s; /* Delay transition */
+        }
+        
+        /* Hide sidebar icon when expanded */
+        #cabinet-sidebar:hover .sidebar-icon {
+            opacity: 0;
+        }
+
+        /* Scrollbar styling for sidebars */
+        .sidebar-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .sidebar-container::-webkit-scrollbar-track {
+            background: #f3f4f6; /* gray-100 */
+        }
+        .sidebar-container::-webkit-scrollbar-thumb {
+            background: #d1d5db; /* gray-300 */
+            border-radius: 4px;
+        }
+        .sidebar-container::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af; /* gray-400 */
+        }
+        /* --- End Sidebar Styles --- */
+
+
+        /* Main content area */
+        .main-content {
+            flex-grow: 1; /* Allow content to grow */
+            min-width: 0; /* Allow shrinking */
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Loading Spinner */
+        .loader {
+            border-top-color: #3b82f6; /* blue-500 */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Vault Dropdown Styles (in sidebar) */
+        details > summary { 
+            list-style: none; 
+            cursor: pointer;
+        }
+        details > summary::-webkit-details-marker { display: none; }
+        details > summary::before {
+            content: '►';
+            margin-right: 0.5rem;
+            font-size: 0.8em;
+            transition: transform 0.2s;
+            display: inline-block;
+        }
+        details[open] > summary::before {
+            transform: rotate(90deg);
+        }
+
+        /* --- NEW: Pomodoro Timer Card Styles --- */
+        #pomodoro-timer-display {
+            font-size: 4.5rem; /* 72px */
+            line-height: 1;
+            font-weight: 700;
+            color: #1f2937; /* gray-800 */
+        }
+        .pomodoro-btn {
+            background-color: #f3f4f6; /* gray-100 */
+            border: 1px solid #d1d5db; /* gray-300 */
+            color: #374151; /* gray-700 */
+            transition: all 0.2s ease;
+        }
+        .pomodoro-btn:hover {
+            background-color: #e5e7eb; /* gray-200 */
+        }
+        .pomodoro-btn.active {
+            background-color: #3b82f6; /* blue-500 */
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
+        #pomodoro-main-btn {
+            font-size: 1rem; /* 16px */
+            padding: 0.75rem 1.5rem; /* 12px 24px */
+        }
+        
+        /* Pomodoro Edit Styles */
+        .pomodoro-edit-input {
+            width: 6rem; /* 96px */
+            background-color: #f9fafb; /* gray-50 */
+            border: 1px solid #d1d5db; /* gray-300 */
+            color: #1f2937;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            font-weight: 500;
+            text-align: center;
+        }
+        /* --- End Pomodoro Card Styles --- */
+
+
+        /* Custom Alert Styles */
+        .alert-toast {
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            transform: translateX(120%);
+            opacity: 0;
+            visibility: hidden;
+        }
+        .alert-toast.show {
+            transform: translateX(0);
+            opacity: 1;
+            visibility: visible;
+        }
+       
+        /* Cabinet Styles */
+        .cabinet-item-enter {
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+        .cabinet-item-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Chart Placeholder */
+        #chart-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 250px; /* Or match chart height */
+            color: #6b7280;
+            text-align: center;
+            padding: 1rem;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen transition-colors duration-300 text-gray-800">
+
+    <!-- Header Bar -->
+    <header class="sticky top-0 z-40 w-full shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Left Side: Title -->
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-xl font-bold text-gray-900">My Study Hub</h1>
+                </div>
+
+                <!-- Right Side: Links -->
+                <div class="flex items-center space-x-4">
+                    <!-- Links Dropdown -->
+                    <div class="dropdown">
+                        <button class="flex items-center space-x-1 text-gray-600 hover:text-gray-900 px-2">
+                            <i class="fas fa-link"></i>
+                            <span>Links</span>
+                        </button>
+                        <div class="dropdown-menu">
+                            <div class="p-4 border-b border-gray-200">
+                                <h3 class="text-lg font-semibold text-gray-900">Useful Links</h3>
+                            </div>
+                            <!-- Add Link Form -->
+                            <form id="add-link-form" class="p-4 space-y-2 border-b border-gray-200">
+                                <input type="text" id="link-title-input" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" placeholder="Link Title" required>
+                                <input type="url" id="link-url-input" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" placeholder="Link URL (e.g., https://...)" required>
+                                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-300 text-sm">
+                                    Add Link
+                                </button>
+                            </form>
+                            <!-- Links List -->
+                            <ul id="links-container" class="p-4 overflow-y-auto max-h-80 space-y-3">
+                                <!-- Links will be dynamically inserted here -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Top-level Flex Container (for sidebar + main) -->
+    <div class="flex gap-6 p-6">
+
+        <!-- Vault Sidebar (Left) -->
+        <aside id="vault-sidebar" class="sidebar">
+            <div class="h-full flex flex-col">
+                <!-- Icon (visible when collapsed) -->
+                <div class="sidebar-icon flex items-center justify-center h-16 transition-opacity duration-200">
+                    <i class="fas fa-archive text-2xl text-gray-500"></i>
+                </div>
+                
+                <!-- Content (visible when expanded) -->
+                <div class="sidebar-content flex-1 flex flex-col p-4 overflow-hidden">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 whitespace-nowrap">Task Vault</h2>
+                    <div id="vault-container" class="sidebar-container flex-1 overflow-y-auto pr-2 space-y-2">
+                        <!-- Vault entries will be dynamically inserted here -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content max-w-5xl mx-auto space-y-6">
+            <!-- Date Header -->
+            <h2 id="current-date" class="text-xl font-semibold text-center text-gray-600"></h2>
+
+            <!-- Grid Layout -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <!-- Study Dashboard Card (Span 1) -->
+                <div class="md:col-span-1 bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 pb-4 border-b border-gray-200">Study Dashboard</h2>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Time per Subject (Last 7 Days)</h3>
+                    <!-- Chart Container -->
+                    <div class="relative h-64">
+                        <canvas id="subject-chart" class="hidden"></canvas>
+                        <div id="chart-placeholder" class="absolute inset-0 flex items-center justify-center">
+                            <span class="text-gray-500 text-center p-4">Complete tasks with timers to see your stats.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Pomodoro Timer Card (Span 1) -->
+                <div class="md:col-span-1 bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 flex flex-col items-center justify-center">
+                    
+                    <!-- Pomodoro Display View -->
+                    <div id="pomodoro-display-view" class="flex flex-col items-center w-full">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-4">Pomodoro Timer</h2>
+                        <!-- Timer Display -->
+                        <div id="pomodoro-timer-display" class="mb-4">
+                            25:00
+                        </div>
+                        <!-- Mode Buttons -->
+                        <div class="flex gap-2 mb-4">
+                            <button id="pomo-mode-work" class="pomodoro-btn py-2 px-4 rounded-lg text-sm font-medium active">
+                                Work
+                            </button>
+                            <button id="pomo-mode-short" class="pomodoro-btn py-2 px-4 rounded-lg text-sm font-medium">
+                                Short
+                            </button>
+                            <button id="pomo-mode-long" class="pomodoro-btn py-2 px-4 rounded-lg text-sm font-medium">
+                                Long
+                            </button>
+                        </div>
+                        <!-- Control Buttons -->
+                        <div class="flex gap-4">
+                            <button id="pomodoro-main-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105">
+                                START
+                            </button>
+                            <button id="pomodoro-reset-btn" class="pomodoro-btn p-3 rounded-lg shadow-sm transition-all duration-300" title="Reset Timer">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button id="pomodoro-edit-btn" class="pomodoro-btn p-3 rounded-lg shadow-sm transition-all duration-300" title="Edit Timers">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pomodoro Edit View (FIXED) -->
+                    <div id="pomodoro-edit-view" class="hidden w-full flex flex-col items-center">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4 text-center">Edit Timers</h3>
+                        <div class="space-y-3 w-full max-w-xs">
+                            <div class="flex items-center justify-between">
+                                <label for="pomo-edit-work-input" class="text-base font-medium text-gray-700">Work:</label>
+                                <input type="number" id="pomo-edit-work-input" class="pomodoro-edit-input" min="1" step="any">
+                                <span class="text-base text-gray-500">min</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label for="pomo-edit-short-input" class="text-base font-medium text-gray-700">Short Break:</label>
+                                <input type="number" id="pomo-edit-short-input" class="pomodoro-edit-input" min="1" step="any">
+                                <span class="text-base text-gray-500">min</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label for="pomo-edit-long-input" class="text-base font-medium text-gray-700">Long Break:</label>
+                                <input type="number" id="pomo-edit-long-input" class="pomodoro-edit-input" min="1" step="any">
+                                <span class="text-base text-gray-500">min</span>
+                            </div>
+                            <div class="flex gap-4 pt-3">
+                                <button id="pomo-edit-cancel-btn" class="w-full pomodoro-btn py-2 px-6 rounded-lg shadow-sm transition-all duration-300 font-semibold">
+                                    Cancel
+                                </button>
+                                <button id="pomo-edit-save-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all duration-300">
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- My Subjects Card (Span 1) -->
+                <div class="md:col-span-1 bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 pb-4 border-b border-gray-200">My Subjects</h2>
+                    <form id="add-subject-form" class="flex gap-2 mb-4">
+                        <input type="text" id="subject-name-input" class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5" placeholder="New subject name..." required>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 text-sm">
+                            Add
+                        </button>
+                    </form>
+                    <ul class="space-y-2" id="subject-list">
+                        <!-- Subjects will be dynamically inserted here -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Daily Study Plan (Full Width) -->
+            <div class="md:col-span-3 bg-white rounded-2xl shadow-lg p-6 sm:p-8 hover:shadow-xl transition-all duration-300">
+                <h1 class="text-2xl font-bold text-gray-900 mb-6 pb-4 border-b border-gray-200">Daily Study Plan</h1>
+                
+                <!-- Input Form -->
+                <form id="add-task-form" class="space-y-4 mb-6">
+                    <input type="text" id="task-input" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-lg rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5" placeholder="Add a new task..." required>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <select id="task-subject-select" class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5">
+                            <option value="">No Subject</option>
+                            <!-- Subject options will be dynamically inserted here -->
+                        </select>
+                        <input type="date" id="task-due-date" class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105">
+                        Add Task
+                    </button>
+                </form>
+
+                <!-- Task List Container -->
+                <ul class="space-y-4" id="task-list">
+                    <!-- Tasks will be dynamically inserted here -->
+                </ul>
+
+                <!-- Complete Day Button -->
+                <div class="mt-8 text-center">
+                    <button id="complete-day-button" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105">
+                        Complete Day & Save
+                    </button>
+                </div>
+            </div>
+
+            <!-- REMOVED: Personal Cabinet Card (Full Width) -->
+            
+        </main>
+
+        <!-- NEW: Cabinet Sidebar (Right) -->
+        <aside id="cabinet-sidebar" class="sidebar">
+            <div class="h-full flex flex-col">
+                <!-- Icon (visible when collapsed) -->
+                <div class="sidebar-icon flex items-center justify-center h-16 transition-opacity duration-200">
+                    <!-- Fixed Icon -->
+                    <i class="fas fa-box-archive text-2xl text-gray-500"></i>
+                </div>
+                
+                <!-- Content (visible when expanded) -->
+                <div class="sidebar-content flex-1 flex flex-col p-4 overflow-hidden">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4 whitespace-nowrap">Personal Cabinet</h2>
+                    
+                    <!-- Add Cabinet Form -->
+                    <form id="add-cabinet-form" class="p-2 space-x-2 flex border border-gray-200 rounded-lg mb-4">
+                        <input type="text" id="cabinet-name-input" class="flex-1 bg-gray-50 border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" placeholder="New cabinet name..." required>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-md transition-all duration-300 text-sm">
+                            Create
+                        </button>
+                    </form>
+                    
+                    <!-- Cabinets List -->
+                    <div id="cabinets-container" class="sidebar-container flex-1 overflow-y-auto pr-2 space-y-4">
+                        <!-- Cabinets will be dynamically inserted here -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Undo Toast Notification -->
+    <div id="undo-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white py-3 px-5 rounded-lg shadow-lg flex items-center justify-between gap-4 hidden">
+        <span id="undo-message">Task deleted.</span>
+        <button id="undo-btn" class="font-bold text-blue-400 hover:text-blue-300 whitespace-nowrap">Undo</button>
+    </div>
+
+    <!-- Alert Toast Container -->
+    <div id="alert-container" class="fixed top-20 right-6 z-50 space-y-3 w-80">
+        <!-- Alerts will be dynamically injected here -->
+    </div>
+
+    <!-- Modal for Loading/Error Messages (Pomodoro Edit is no longer here) -->
+    <div id="modal-backdrop" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <!-- This will be the container for modal content -->
+        <div id="modal-content" class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4">
+            <!-- Modal content (like loader) gets injected here -->
+        </div>
+    </div>
+    
+    <!-- Modal for Logging Description -->
+    <div id="log-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden" aria-labelledby="log-modal-title" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4">
+            <h3 class="text-xl font-medium text-gray-900 mb-4" id="log-modal-title">Log for...</h3>
+            <textarea id="log-modal-textarea" class="w-full h-32 bg-gray-50 border border-gray-300 text-gray-900 text-lg rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5" placeholder="Add your completion notes..."></textarea>
+            <input type="hidden" id="log-modal-task-id">
+            <div class="mt-6 flex justify-end gap-4">
+                <button id="log-modal-cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-lg shadow-sm transition-all duration-300">
+                    Cancel
+                </button>
+                <button id="log-modal-save-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-lg shadow-md transition-all duration-300">
+                    Save Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template for Modal Loader -->
+    <template id="modal-loader-template">
+        <div class="flex flex-col items-center">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-300 h-12 w-12 mb-4"></div>
+            <h3 class="text-xl font-medium text-gray-900 mb-2" id="modal-title">Loading</h3>
+            <p class="text-gray-600 text-center" id="modal-message">Please wait...</p>
+            <button id="modal-close-btn" class="mt-6 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-lg shadow-md transition-all duration-300 hidden">
+                Close
+            </button>
+        </div>
+    </template>
+    
+    <!-- 
+      ALL JAVASCRIPT LOGIC HAS BEEN MOVED TO A SEPARATE .ts FILE
+      (e.g., /src/main.ts) TO BE COMPATIBLE WITH YOUR TYPESCRIPT PROJECT.
+      THIS HTML FILE IS NOW JUST FOR THE UI STRUCTURE.
+    -->
+
+</body>
+</html>
